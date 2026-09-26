@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的百国足迹地图 V1.0</title>
+
+<!-- Leaflet 免费地图库（CDN） -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root{
+    --red:#e11d48; --blue:#3b82f6; --gold:#f5b301;
+    --gray:#94a3b8; --line:#e5e7eb; --text:#1f2937; --sub:#6b7280;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--text)}
+  #app{display:flex;height:100vh;width:100%}
+
+  /* ---------- 侧边栏 ---------- */
+  #sidebar{width:350px;flex:0 0 350px;height:100%;display:flex;flex-direction:column;
+           background:#fff;border-left:1px solid var(--line);box-shadow:-2px 0 8px rgba(0,0,0,.06);z-index:1000}
+  #sidebar header{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+  #sidebar h1{margin:0;font-size:17px;letter-spacing:.5px}
+  #sidebar h1 small{display:block;font-size:11px;font-weight:400;color:var(--sub);margin-top:4px;line-height:1.6}
+
+  .stats{display:flex;gap:8px;padding:10px 12px}
+  .stat{flex:1;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center}
+  .stat b{display:block;font-size:19px;line-height:1.3}
+  .stat span{font-size:11px;color:var(--sub)}
+
+  .progress-wrap{padding:0 12px 12px}
+  .progress-txt{font-size:12px;color:var(--sub);display:flex;justify-content:space-between;margin-bottom:5px}
+  .progress{height:8px;background:#eef2f7;border-radius:99px;overflow:hidden}
+  .progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--red));transition:width .4s}
+
+  .tabs{display:flex;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .tabs button{flex:1;padding:9px 0;font-size:13px;background:#fff;border:0;cursor:pointer;color:var(--sub);font-family:inherit}
+  .tabs button.on{color:var(--red);font-weight:600;box-shadow:inset 0 -2px 0 var(--red)}
+
+  .list{flex:1;overflow-y:auto;padding:6px 0}
+  .list.hide{display:none}
+  .item{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:13px;cursor:pointer}
+  .item:hover{background:#f8fafc}
+  .item .dot{flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--blue);opacity:.85}
+  .item .dot.done{background:var(--red);opacity:1;box-shadow:0 0 0 2px var(--gold)}
+  .item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .name em{font-style:normal;color:var(--sub);font-size:11px;margin-left:4px}
+  .item .badge{font-size:10px;color:var(--red);border:1px solid var(--red);border-radius:99px;padding:0 6px}
+  .list-note{font-size:11px;color:var(--sub);padding:8px 14px 14px;line-height:1.7;border-top:1px solid var(--line)}
+  /* ---------- 地图 ---------- */
+  #map{flex:1;height:100%;background:#eef2f7}
+  .pin{background:none;border:0}
+  .pin .dot{display:block;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+  .dot-visited{width:14px;height:14px;background:var(--red)}
+  .dot-bucket{width:12px;height:12px;background:var(--blue);opacity:.85}
+  .dot-done{width:18px;height:18px;background:var(--red);border:3px solid var(--gold)!important;box-shadow:0 0 8px var(--gold)!important}
+  .leaflet-popup-content{margin:0;width:250px!important;font-family:inherit}
+  .leaflet-popup-content-wrapper{border-radius:10px;padding:0;overflow:hidden}
+
+  /* ---------- Popup 卡片 ---------- */
+  .pop-img{width:100%;height:120px;object-fit:cover;display:block;background:#f1f5f9}
+  .pop-ph{width:100%;height:70px;display:flex;align-items:center;justify-content:center;
+          background:#f1f5f9;color:var(--gray);font-size:12px}
+  .pop-body{padding:10px 12px 12px}
+  .pop-body h3{margin:0 0 6px;font-size:15px}
+  .pop-body h3 span{font-size:11px;font-weight:400;color:var(--sub);margin-left:4px}
+  .pop-row{font-size:12px;color:var(--sub);margin-bottom:4px}
+  .pop-note{font-size:12.5px;line-height:1.6;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+
+  /* ---------- 图例 / 图层开关 ---------- */
+  .legend{position:absolute;left:10px;bottom:22px;z-index:800;background:rgba(255,255,255,.95);
+          border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:12px;
+          box-shadow:0 2px 8px rgba(0,0,0,.12);line-height:1.9}
+  .legend b{display:block;font-size:11px;color:var(--sub);margin-bottom:2px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+  .legend i.red{background:var(--red)}
+  .legend i.blue{background:var(--blue)}
+  .legend i.gold{background:var(--red);box-shadow:0 0 0 2px var(--gold)}
+  .legend label{display:block;cursor:pointer;user-select:none;margin-top:5px;padding-top:5px;border-top:1px dashed var(--line)}
+  .legend input{vertical-align:-1px;margin-right:5px}
+  .err{padding:20px;font-size:13px;color:var(--red);background:#fff;margin:12px;border-radius:8px}
+  .tile-warn{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:900;
+             background:#fff5f5;border:1px solid var(--red);color:var(--red);border-radius:8px;
+             padding:6px 12px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  @media(max-width:700px){
+    #app{flex-direction:column}
+    #sidebar{width:100%;flex:0 0 46%;height:46%;border-left:0;border-top:1px solid var(--line)}
+    #map{height:54%}
+  }
+
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+
+  <aside id="sidebar">
+    <header>
+      <h1>🌍 我的旅行足迹地图 <small>MVP V1.0 · 记录去过的地方，对照全球最推荐的 100 个目的地</small></h1>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><b id="sPlaces">0</b><span>已打卡地点</span></div>
+      <div class="stat"><b id="sCountries">0</b><span>已到访国家/地区</span></div>
+      <div class="stat"><b id="sDone">0</b><span>推荐地已打卡</span></div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-txt"><span>推荐清单完成度</span><span id="sRatio">0 / 100</span></div>
+      <div class="progress"><i id="bar"></i></div>
+    </div>
+
+    <div class="tabs">
+      <button class="on" data-tab="bucket">推荐 100 目的地</button>
+      <button data-tab="visited">我的足迹</button>
+    </div>
+
+    <div class="list" id="listBucket"></div>
+    <div class="list hide" id="listVisited"></div>
+    <div class="list-note" id="dataNote"></div>
+  </aside>
+</div>
+<script>
+/* ============================================================
+   ① 数据区（直接改这里即可，无需后端）
+   ============================================================ */
+// 我的足迹：[城市/地点, 国家或地区, 纬度, 经度, 同行, 文字回忆, 图片(本地路径或 URL，可留空)]
+const VISITED = [
+  // ——— 中国 ———
+  ["香港",        "中国",     22.3193, 114.1694, "家人", "维港夜景 + 天星小轮，第一次看到这么密集的楼。", "images/hongkong.jpg"],
+  ["澳门",        "中国",     22.1987, 113.5439, "朋友", "大三巴 + 葡挞，一天来回刚刚好。", ""],
+  ["北京",        "中国",     39.9042, 116.4074, "家人", "故宫、长城、烤鸭，冬天天很蓝。", ""],
+  ["上海 Shanghai","中国",    31.2304, 121.4737, "同事", "外滩夜游，出差顺便逛了田子坊。", ""],
+  ["深圳",        "中国",     22.5431, 114.0579, "自己", "常住城市，周末爬梧桐山、走深圳湾。", ""],
+  ["杭州",        "中国",     30.2741, 120.1551, "家人", "西湖骑行一天，龙井茶很香。", ""],
+  ["周庄",        "中国",     31.1150, 120.8500, "朋友", "江南水乡摇橹船，阿婆茶。", ""],
+  ["广州",        "中国",     23.1291, 113.2644, "同事", "早茶从早吃到中午。", ""],
+  ["佛山",        "中国",     23.0215, 113.1214, "朋友", "祖庙看醒狮，双皮奶必点。", ""],
+  ["海口",        "中国",     20.0444, 110.1999, "家人", "骑楼老街 + 海南粉，很慢的城市。", ""],
+  ["西安",        "中国",     34.3416, 108.9398, "自己", "兵马俑、城墙骑车、肉夹馍。", ""],
+  // ——— 马来西亚 ———
+  ["迪沙鲁 Desaru","马来西亚", 1.5547, 104.2692, "家人", "海边度假村，晚上看萤火虫。", ""],
+  ["马六甲",      "马来西亚",  2.1896, 102.2501, "朋友", "鸡场街夜市，娘惹菜和椰子冰。", ""],
+  ["刁曼岛 Tioman","马来西亚", 2.7900, 104.1700, "朋友", "浮潜看到小鲨鱼，海水超清。", "images/tioman.jpg"],
+  ["龟咯 Kukup",  "马来西亚",  1.3317, 103.4450, "家人", "海上渔村吃海鲜，看日落。", ""],
+  ["Pulau Besar", "马来西亚",  2.1100, 102.3300, "朋友", "安静的小岛，适合发呆两天。", ""],
+  ["槟城 Penang", "马来西亚",  5.4141, 100.3288, "朋友", "乔治市壁画街 + 叻沙 + 炒粿条。", ""],
+  ["吉隆坡 KL",   "马来西亚",  3.1390, 101.6869, "家人", "双子塔夜景，商场逛到腿软。", ""],
+  ["金马仑高原",  "马来西亚",  4.4700, 101.3800, "家人", "草莓园和茶园，山上很凉爽。", ""],
+  // ——— 日本 ———
+  ["东京 Tokyo",  "日本",     35.6762, 139.6503, "朋友", "涩谷十字路口、筑地海鲜、夜景。", ""],
+  ["大阪",        "日本",     34.6937, 135.5023, "朋友", "道顿堀吃到撑，章鱼烧必吃。", ""],
+  ["京都 Kyoto",  "日本",     35.0116, 135.7681, "家人", "清水寺 + 伏见稻荷千本鸟居，秋天最美。", "images/kyoto.jpg"],
+  ["北海道",      "日本",     43.0621, 141.3544, "家人", "冬天滑雪 + 拉面 + 温泉。", ""],
+  // ——— 泰国 ———
+  ["普吉岛 Phuket","泰国",     7.8804,  98.3923, "朋友", "跳岛浮潜，皮皮岛人有点多。", ""],
+  ["甲米 Krabi",  "泰国",      8.0863,  98.9063, "朋友", "莱利海滩攀岩，看石灰岩悬崖。", ""],
+  ["丽贝岛 Koh Lipe","泰国",   6.4885,  99.3037, "朋友", "日出海滩 + 浮潜，岛很小但很美。", ""],
+  ["曼谷 Bangkok","泰国",     13.7563, 100.5018, "家人", "大皇宫、水上市场、冬阴功。", ""],
+  // ——— 印度尼西亚 ———
+  ["巴厘岛 Bali", "印度尼西亚",-8.4095, 115.1889, "朋友", "乌布梯田、海神庙日落，浪很大。", "images/bali.jpg"],
+  ["民丹岛 Bintan","印度尼西亚",1.0550, 104.4300, "家人", "周末度假，红树林和沙滩。", ""],
+  ["巴淡岛 Batam","印度尼西亚", 1.1301, 104.0529, "家人", "坐船过去，海鲜便宜。", ""],
+  // ——— 韩国 / 越南 ———
+  ["首尔 Seoul",  "韩国",     37.5665, 126.9780, "朋友", "明洞小吃、景福宫、南山塔。", ""],
+  ["胡志明市 HCMC","越南",    10.8231, 106.6297, "朋友", "法棍、咖啡、摩托大军过马路。", ""],
+  // ——— 台湾地区 ———
+  ["基隆 Keelung","台湾",     25.1283, 121.7419, "朋友", "庙口夜市，雨天也热闹。", ""],
+  ["高雄 Kaohsiung","台湾",   22.6273, 120.3014, "朋友", "驳二艺术特区 + 六合夜市。", ""],
+  ["九份 Jiufen", "台湾",     25.1096, 121.8443, "家人", "老街红灯笼，山海景像电影。", ""],
+  ["台北 Taipei", "台湾",     25.0330, 121.5654, "家人", "夜市 + 101 + 北投温泉。", ""]
+];
+// 全球最推荐目的地（示例 50 条；把 BUCKET_TARGET 保持 100 并继续往下补充即可）
+// 格式：[中文名, 英文名(用于与足迹自动比对), 国家/地区, 纬度, 经度]
+const BUCKET_TARGET = 100;
+const BUCKET = [
+  ["京都",        "Kyoto",        "日本",        35.0116,  135.7681],
+  ["东京",        "Tokyo",        "日本",        35.6762,  139.6503],
+  ["巴厘岛",      "Bali",         "印度尼西亚",  -8.5069,  115.2625],
+  ["普吉岛",      "Phuket",       "泰国",         7.8804,   98.3923],
+  ["台北",        "Taipei",       "台湾",        25.0330,  121.5654],
+  ["曼谷",        "Bangkok",      "泰国",        13.7563,  100.5018],
+  ["首尔",        "Seoul",        "韩国",        37.5665,  126.9780],
+  ["上海",        "Shanghai",     "中国",        31.2304,  121.4737],
+  ["巴黎",        "Paris",        "法国",        48.8566,    2.3522],
+  ["圣托里尼",    "Santorini",    "希腊",        36.3932,   25.4615],
+  ["罗马",        "Rome",         "意大利",      41.9028,   12.4964],
+  ["威尼斯",      "Venice",       "意大利",      45.4408,   12.3155],
+  ["巴塞罗那",    "Barcelona",    "西班牙",      41.3851,    2.1734],
+  ["冰岛极光",    "Reykjavik",    "冰岛",        64.1466,  -21.9426],
+  ["少女峰",      "Interlaken",   "瑞士",        46.6863,    7.8632],
+  ["挪威峡湾",    "Bergen",       "挪威",        60.3913,    5.3221],
+  ["纽约",        "New York",     "美国",        40.7128,  -74.0060],
+  ["旧金山",      "San Francisco","美国",        37.7749, -122.4194],
+  ["黄石公园",    "Yellowstone",  "美国",        44.4280, -110.5885],
+  ["大峡谷",      "Grand Canyon", "美国",        36.1069, -112.1129],
+  ["马丘比丘",    "Machu Picchu", "秘鲁",       -13.1631,  -72.5450],
+  ["乌尤尼盐沼",  "Uyuni",        "玻利维亚",   -20.1338,  -67.4891],
+  ["伊瓜苏瀑布",  "Iguazu",       "阿根廷",     -25.6953,  -54.4367],
+  ["开普敦",      "Cape Town",    "南非",       -33.9249,   18.4241],
+  ["维多利亚瀑布","Victoria Falls","津巴布韦",  -17.9243,   25.8572],
+  ["马拉喀什",    "Marrakech",    "摩洛哥",      31.6295,   -7.9811],
+  ["吉萨金字塔",  "Giza",         "埃及",        29.9792,   31.1342],
+  ["佩特拉古城",  "Petra",        "约旦",        30.3285,   35.4444],
+  ["迪拜",        "Dubai",        "阿联酋",      25.2048,   55.2708],
+  ["伊斯坦布尔",  "Istanbul",     "土耳其",      41.0082,   28.9784],
+  ["马尔代夫",    "Maldives",     "马尔代夫",     4.1755,   73.5093],
+  ["康提佛牙寺",  "Kandy",        "斯里兰卡",     7.2906,   80.6337],
+  ["博卡拉雪山",  "Pokhara",      "尼泊尔",      28.2096,   83.9856],
+  ["泰姬陵",      "Agra",         "印度",        27.1751,   78.0421],
+  ["吴哥窟",      "Angkor Wat",   "柬埔寨",      13.4125,  103.8670],
+  ["下龙湾",      "Ha Long Bay",  "越南",        20.9101,  107.1839],
+  ["琅勃拉邦",    "Luang Prabang","老挝",        19.8867,  102.1350],
+  ["大堡礁",      "Cairns",       "澳大利亚",   -16.9203,  145.7710],
+  ["悉尼歌剧院",  "Sydney",       "澳大利亚",   -33.8688,  151.2093],
+  ["皇后镇",      "Queenstown",   "新西兰",     -45.0312,  168.6626],
+  ["复活节岛",    "Easter Island","智利",       -27.1127, -109.3497],
+  ["加拉帕戈斯",  "Galapagos",    "厄瓜多尔",    -0.9538,  -90.9656],
+  ["布拉格",      "Prague",       "捷克",        50.0755,   14.4378],
+  ["阿姆斯特丹",  "Amsterdam",    "荷兰",        52.3676,    4.9041],
+  ["里斯本",      "Lisbon",       "葡萄牙",      38.7223,   -9.1393],
+  ["维也纳",      "Vienna",       "奥地利",      48.2082,   16.3738],
+  ["新天鹅堡",    "Neuschwanstein","德国",       47.5576,   10.7498],
+  ["莫斯科红场",  "Moscow",       "俄罗斯",      55.7558,   37.6173],
+  ["贝加尔湖",    "Baikal",       "俄罗斯",      53.5587,  108.1650],
+  ["夏威夷",      "Honolulu",     "美国",        21.3069, -157.8583]
+  // ↑ 继续按同样格式补充到 100 条即可
+];
+/* ============================================================
+   ② 初始化地图（Leaflet + OpenStreetMap 标准免费瓦片，无需 API Key）
+   ============================================================ */
+const HOME = { center: [22, 105], zoom: 3 };
+const map = L.map('map', { minZoom: 2, maxZoom: 18, worldCopyJump: true }).setView(HOME.center, HOME.zoom);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> 贡献者',
+  subdomains: 'abc', maxZoom: 19
+}).addTo(map);
+
+// 瓦片加载失败时给出一次性提示（避免出现空白底图却不知道为什么）
+let tileWarned = false;
+map.on('tileerror', () => {
+  if (tileWarned) return;
+  tileWarned = true;
+  const w = document.createElement('div');
+  w.className = 'tile-warn';
+  w.textContent = '⚠️ 地图底图加载失败，请检查网络（tile.openstreetmap.org）';
+  document.querySelector('#map').appendChild(w);
+});
+
+// 一个「回到全球视角」小按钮
+const HomeCtl = L.Control.extend({
+  options: { position: 'topleft' },
+  onAdd() {
+    const b = L.DomUtil.create('button', 'leaflet-bar');
+    b.textContent = '🌍'; b.title = '回到全球视角'; b.type = 'button';
+    b.style.cssText = 'width:30px;height:30px;font-size:15px;line-height:1;cursor:pointer;background:#fff;border:0';
+    L.DomEvent.on(b, 'click', e => { L.DomEvent.stop(e); map.setView(HOME.center, HOME.zoom); });
+    return b;
+  }
+});
+map.addControl(new HomeCtl());
+
+/* ============================================================
+   ③ 足迹 ↔ 推荐清单 自动比对
+   把 "普吉岛 Phuket" 拆成英文词，与推荐地的英文名做交集匹配
+   ============================================================ */
+const tokenOf = s => String(s).toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length > 2);
+
+const visitedTokens = new Set();
+VISITED.forEach(v => tokenOf(v[0]).forEach(t => visitedTokens.add(t)));
+const bucketTokens = new Set();
+BUCKET.forEach(b => tokenOf(b[1]).forEach(t => bucketTokens.add(t)));
+
+const inBucketList = name => tokenOf(name).some(t => bucketTokens.has(t));   // 足迹里的点是否属于推荐清单
+const isBucketDone = b => tokenOf(b[1]).some(t => visitedTokens.has(t));     // 推荐地是否已打卡
+
+/* ============================================================
+   ④ 图标与卡片（Popup）
+   ============================================================ */
+const dotIcon = (cls, size) => L.divIcon({
+  className: 'pin',
+  html: '<span class="dot ' + cls + '"></span>',
+  iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2 - 2]
+});
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// 图片加载失败时换成占位块
+window.__imgFail = function (el) {
+  const d = document.createElement('div');
+  d.className = 'pop-ph';
+  d.textContent = '📷 图片未能加载：' + (el.getAttribute('data-src') || '');
+  el.replaceWith(d);
+};
+const imgHtml = (src, title) => src
+  ? '<img class="pop-img" src="' + esc(src) + '" data-src="' + esc(src) + '" alt="' + esc(title) + '" onerror="__imgFail(this)">'
+  : '<div class="pop-ph">📷 暂无照片 · 把图片放进 images/ 或在数据里填 URL</div>';
+
+const popVisited = (v, gold) => {
+  const [city, country, , , who, note, img] = v;
+  return imgHtml(img, city) +
+    '<div class="pop-body">' +
+      '<h3>' + esc(city) + '<span>' + esc(country) + '</span></h3>' +
+      (gold ? '<div class="pop-row">🏅 已在「全球推荐 ' + BUCKET_TARGET + ' 目的地」清单内</div>' : '') +
+      '<div class="pop-row">🧑‍🤝‍🧑 同行：' + esc(who || '—') + '</div>' +
+      '<div class="pop-note">📝 ' + esc(note || '还没有写回忆～') + '</div>' +
+    '</div>';
+};
+
+const popBucket = b => {
+  const [cn, en, country] = b;
+  return '<div class="pop-body" style="padding-top:12px">' +
+      '<h3>' + esc(cn) + '<span>' + esc(country) + '</span></h3>' +
+      '<div class="pop-row">🌐 ' + esc(en) + '</div>' +
+      '<div class="pop-row">🎯 状态：想去（还没打卡）</div>' +
+      '<div class="pop-note">💡 从「推荐 ' + BUCKET_TARGET + ' 目的地」清单中的愿望，去过之后它会自动变成带金边的红点。</div>' +
+    '</div>';
+};
+/* ============================================================
+   ⑤ 打点：足迹（红 / 金边红）、推荐清单（蓝）
+   ============================================================ */
+const visitedLayer = L.layerGroup().addTo(map);
+const bucketLayer = L.layerGroup().addTo(map);
+
+const visitedPins = VISITED.map((v, i) => {
+  const [city, country, lat, lng] = v;
+  const gold = inBucketList(city);   // 命中推荐清单 → 高亮
+  const marker = L.marker([lat, lng], {
+    icon: dotIcon(gold ? 'dot-done' : 'dot-visited', gold ? 18 : 14), title: city
+  }).addTo(visitedLayer).bindPopup(popVisited(v, gold)).bindTooltip(city + (gold ? ' 🏅' : ''));
+  return { v, i, gold, marker };
+});
+
+// 推荐点：未打卡的画蓝点；已打卡的直接用上面那个「红+金边」点，避免两点重叠
+const bucketPins = BUCKET.map((b, i) => {
+  const done = isBucketDone(b);
+  let marker = null;
+  if (done) {
+    const hit = visitedPins.find(p => tokenOf(p.v[0]).some(t => tokenOf(b[1]).includes(t)));
+    marker = hit ? hit.marker : null;
+  } else {
+    marker = L.marker([b[3], b[4]], { icon: dotIcon('dot-bucket', 12), title: b[0] })
+      .addTo(bucketLayer).bindPopup(popBucket(b)).bindTooltip(b[0]);
+  }
+  return { b, i, done, marker };
+});
+
+/* ============================================================
+   ⑥ 侧边栏统计 + 列表
+   ============================================================ */
+const doneTotal = bucketPins.filter(p => p.done).length;
+const $ = id => document.getElementById(id);
+$('sPlaces').textContent = VISITED.length;
+$('sCountries').textContent = new Set(VISITED.map(v => v[1])).size;
+$('sDone').textContent = doneTotal;
+$('sRatio').textContent = doneTotal + ' / ' + BUCKET_TARGET;
+$('bar').style.width = Math.min(100, doneTotal / BUCKET_TARGET * 100).toFixed(1) + '%';
+$('dataNote').innerHTML =
+  '📊 足迹 ' + VISITED.length + ' 条 · 推荐清单已内置 ' + BUCKET.length + ' 条示例（目标 ' + BUCKET_TARGET + ' 条，已打卡 ' + doneTotal + ' 条）。<br>' +
+  '📷 图片：在本文件同目录新建 images/ 放图片，或在数据里直接填在线 URL。<br>' +
+  '✏️ 直接编辑本文件顶部的 VISITED / BUCKET 数组即可更新地图。';
+
+const listBucket = $('listBucket'), listVisited = $('listVisited');
+
+listBucket.innerHTML = bucketPins.map(p =>
+  '<div class="item" data-k="b' + p.i + '">' +
+    '<span class="dot' + (p.done ? ' done' : '') + '"></span>' +
+    '<span class="name">' + esc(p.b[0]) + '<em>' + esc(p.b[2]) + '</em></span>' +
+    (p.done ? '<span class="badge">已打卡</span>' : '') +
+  '</div>').join('');
+
+listVisited.innerHTML = VISITED.map((v, i) => {
+  const gold = visitedPins[i].gold;
+  return '<div class="item" data-k="v' + i + '">' +
+    '<span class="dot' + (gold ? ' done' : '') + '"></span>' +
+    '<span class="name">' + esc(v[0]) + '<em>' + esc(v[1]) + '</em></span>' +
+    (gold ? '<span class="badge">🏅 推荐</span>' : '') +
+  '</div>';
+}).join('');
+
+// 列表点击 → 地图定位并打开卡片
+const pinMap = {};
+bucketPins.forEach(p => { if (p.marker) pinMap['b' + p.i] = p.marker; });
+visitedPins.forEach(p => { pinMap['v' + p.i] = p.marker; });
+
+function jump(key, zoom) {
+  const m = pinMap[key];
+  if (!m) return;
+  map.setView(m.getLatLng(), zoom, { animate: false });   // 立即定位，不做动画
+  m.openPopup();
+}
+listBucket.addEventListener('click', e => { const el = e.target.closest('.item'); if (el) jump(el.dataset.k, 6); });
+listVisited.addEventListener('click', e => { const el = e.target.closest('.item'); if (el) jump(el.dataset.k, 7); });
+
+// Tab 切换
+document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b === btn));
+  listBucket.classList.toggle('hide', btn.dataset.tab !== 'bucket');
+  listVisited.classList.toggle('hide', btn.dataset.tab !== 'visited');
+}));
+
+/* ============================================================
+   ⑦ 图例 + 图层开关
+   ============================================================ */
+const legend = document.createElement('div');
+legend.className = 'legend';
+legend.innerHTML =
+  '<b>图例</b>' +
+  '<div><i class="red"></i>已去过</div>' +
+  '<div><i class="blue"></i>推荐目的地（未打卡）</div>' +
+  '<div><i class="gold"></i>推荐目的地（已打卡）</div>' +
+  '<label><input type="checkbox" id="cbV" checked>我的足迹</label>' +
+  '<label><input type="checkbox" id="cbB" checked>推荐清单</label>';
+document.querySelector('#map').appendChild(legend);
+
+$('cbV').addEventListener('change', e => e.target.checked ? map.addLayer(visitedLayer) : map.removeLayer(visitedLayer));
+$('cbB').addEventListener('change', e => e.target.checked ? map.addLayer(bucketLayer) : map.removeLayer(bucketLayer));
+
+// 窗口尺寸变化后让地图重新计算尺寸
+window.addEventListener('resize', () => map.invalidateSize());
+setTimeout(() => map.invalidateSize(), 200);
+
+
+
+</script>
+
+</body>
+</html>
